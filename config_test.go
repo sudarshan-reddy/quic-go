@@ -75,6 +75,8 @@ var _ = Describe("Config", func() {
 				f.Set(reflect.ValueOf(time.Second))
 			case "EnableDatagrams":
 				f.Set(reflect.ValueOf(true))
+			case "MaxDatagramFrameSize":
+				f.Set(reflect.ValueOf(int64(1280)))
 			case "DisableVersionNegotiationPackets":
 				f.Set(reflect.ValueOf(true))
 			case "DisablePathMTUDiscovery":
