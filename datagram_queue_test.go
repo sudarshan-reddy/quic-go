@@ -3,6 +3,7 @@ package quic
 import (
 	"errors"
 
+	"github.com/lucas-clemente/quic-go/internal/protocol"
 	"github.com/lucas-clemente/quic-go/internal/utils"
 	"github.com/lucas-clemente/quic-go/internal/wire"
 
@@ -23,7 +24,7 @@ var _ = Describe("Datagram Queue", func() {
 
 	Context("sending", func() {
 		It("returns nil when there's no datagram to send", func() {
-			Expect(queue.Get()).To(BeNil())
+			Expect(queue.Get(protocol.DefaultMaxDatagramFrameSize, protocol.Version1)).To(BeNil())
 		})
 
 		It("queues a datagram", func() {
@@ -36,11 +37,11 @@ var _ = Describe("Datagram Queue", func() {
 
 			Eventually(queued).Should(HaveLen(1))
 			Consistently(done).ShouldNot(BeClosed())
-			f := queue.Get()
+			f := queue.Get(protocol.DefaultMaxDatagramFrameSize, protocol.Version1)
 			Expect(f).ToNot(BeNil())
 			Expect(f.Data).To(Equal([]byte("foobar")))
 			Eventually(done).Should(BeClosed())
-			Expect(queue.Get()).To(BeNil())
+			Expect(queue.Get(protocol.DefaultMaxDatagramFrameSize, protocol.Version1)).To(BeNil())
 		})
 
 		It("closes", func() {

@@ -313,7 +313,10 @@ var newConnection = func(
 		RetrySourceConnectionID:         retrySrcConnID,
 	}
 	if s.config.EnableDatagrams {
-		params.MaxDatagramFrameSize = protocol.MaxDatagramFrameSize
+		params.MaxDatagramFrameSize = protocol.ByteCount(s.config.MaxDatagramFrameSize)
+		if params.MaxDatagramFrameSize == 0 {
+			params.MaxDatagramFrameSize = protocol.DefaultMaxDatagramFrameSize
+		}
 	}
 	if s.tracer != nil {
 		s.tracer.SentTransportParameters(params)
@@ -437,7 +440,7 @@ var newClientConnection = func(
 		InitialSourceConnectionID:      srcConnID,
 	}
 	if s.config.EnableDatagrams {
-		params.MaxDatagramFrameSize = protocol.MaxDatagramFrameSize
+		params.MaxDatagramFrameSize = protocol.ByteCount(s.config.MaxDatagramFrameSize)
 	}
 	if s.tracer != nil {
 		s.tracer.SentTransportParameters(params)
@@ -1407,7 +1410,7 @@ func (s *connection) handleAckFrame(frame *wire.AckFrame, encLevel protocol.Encr
 }
 
 func (s *connection) handleDatagramFrame(f *wire.DatagramFrame) error {
-	if f.Length(s.version) > protocol.MaxDatagramFrameSize {
+	if f.Length(s.version) > protocol.ByteCount(s.config.MaxDatagramFrameSize) {
 		return &qerr.TransportError{
 			ErrorCode:    qerr.ProtocolViolation,
 			ErrorMessage: "DATAGRAM frame too large",
