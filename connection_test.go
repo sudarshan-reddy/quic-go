@@ -2103,7 +2103,7 @@ var _ = Describe("Connection", func() {
 
 		BeforeEach(func() {
 			conn.config.MaxIdleTimeout = 30 * time.Second
-			conn.config.KeepAlive = true
+			conn.config.KeepAlivePeriod = 15 * time.Second
 			conn.receivedPacketHandler.ReceivedPacket(0, protocol.ECNNon, protocol.EncryptionHandshake, time.Now(), true)
 		})
 
@@ -2147,7 +2147,7 @@ var _ = Describe("Connection", func() {
 
 		It("doesn't send a PING packet if keep-alive is disabled", func() {
 			setRemoteIdleTimeout(5 * time.Second)
-			conn.config.KeepAlive = false
+			conn.config.KeepAlivePeriod = 0
 			conn.lastPacketReceivedTime = time.Now().Add(-time.Second * 5 / 2)
 			runConn()
 			// don't EXPECT() any calls to mconn.Write()
