@@ -674,8 +674,7 @@ var _ = Describe("Connection", func() {
 		})
 
 		It("drops Version Negotiation packets", func() {
-			b, err := wire.ComposeVersionNegotiation(srcConnID, destConnID, conn.config.Versions)
-			Expect(err).ToNot(HaveOccurred())
+			b := wire.ComposeVersionNegotiation(srcConnID, destConnID, conn.config.Versions)
 			tracer.EXPECT().DroppedPacket(logging.PacketTypeVersionNegotiation, protocol.ByteCount(len(b)), logging.PacketDropUnexpectedPacket)
 			Expect(conn.handlePacketImpl(&receivedPacket{
 				data:   b,
@@ -1692,11 +1691,7 @@ var _ = Describe("Connection", func() {
 			written := make(chan struct{}, 1)
 			sender.EXPECT().WouldBlock().AnyTimes()
 			sender.EXPECT().Send(gomock.Any()).DoAndReturn(func(p *packetBuffer) { written <- struct{}{} })
-			gomock.InOrder(
-				mtuDiscoverer.EXPECT().NextProbeTime(),
-				mtuDiscoverer.EXPECT().ShouldSendProbe(gomock.Any()).Return(true),
-				mtuDiscoverer.EXPECT().NextProbeTime(),
-			)
+			mtuDiscoverer.EXPECT().ShouldSendProbe(gomock.Any()).Return(true)
 			ping := ackhandler.Frame{Frame: &wire.PingFrame{}}
 			mtuDiscoverer.EXPECT().GetPing().Return(ping, protocol.ByteCount(1234))
 			packer.EXPECT().PackMTUProbePacket(ping, protocol.ByteCount(1234)).Return(getPacket(1), nil)
@@ -2107,7 +2102,7 @@ var _ = Describe("Connection", func() {
 
 		BeforeEach(func() {
 			conn.config.MaxIdleTimeout = 30 * time.Second
-			conn.config.KeepAlive = true
+			conn.config.KeepAlivePeriod = 15 * time.Second
 			conn.receivedPacketHandler.ReceivedPacket(0, protocol.ECNNon, protocol.EncryptionHandshake, time.Now(), true)
 		})
 
@@ -2151,7 +2146,7 @@ var _ = Describe("Connection", func() {
 
 		It("doesn't send a PING packet if keep-alive is disabled", func() {
 			setRemoteIdleTimeout(5 * time.Second)
-			conn.config.KeepAlive = false
+			conn.config.KeepAlivePeriod = 0
 			conn.lastPacketReceivedTime = time.Now().Add(-time.Second * 5 / 2)
 			runConn()
 			// don't EXPECT() any calls to mconn.Write()
@@ -2482,6 +2477,7 @@ var _ = Describe("Client Connection", func() {
 		conn.packer = packer
 		cryptoSetup = mocks.NewMockCryptoSetup(mockCtrl)
 		conn.cryptoStreamHandler = cryptoSetup
+		conn.sentFirstPacket = true
 	})
 
 	It("changes the connection ID when receiving the first packet from the server", func() {
@@ -2573,6 +2569,25 @@ var _ = Describe("Client Connection", func() {
 		Expect(conn.handleAckFrame(ack, protocol.Encryption1RTT)).To(Succeed())
 	})
 
+	It("doesn't send a CONNECTION_CLOSE when no packet was sent", func() {
+		conn.sentFirstPacket = false
+		tracer.EXPECT().ClosedConnection(gomock.Any())
+		tracer.EXPECT().Close()
+		running := make(chan struct{})
+		cryptoSetup.EXPECT().RunHandshake().Do(func() {
+			close(running)
+			conn.closeLocal(errors.New("early error"))
+		})
+		cryptoSetup.EXPECT().Close()
+		connRunner.EXPECT().Remove(gomock.Any())
+		go func() {
+			defer GinkgoRecover()
+			conn.run()
+		}()
+		Eventually(running).Should(BeClosed())
+		Eventually(areConnsRunning).Should(BeFalse())
+	})
+
 	Context("handling tokens", func() {
 		var mockTokenStore *MockTokenStore
 
@@ -2592,8 +2607,7 @@ var _ = Describe("Client Connection", func() {
 
 	Context("handling Version Negotiation", func() {
 		getVNP := func(versions ...protocol.VersionNumber) *receivedPacket {
-			b, err := wire.ComposeVersionNegotiation(srcConnID, destConnID, versions)
-			Expect(err).ToNot(HaveOccurred())
+			b := wire.ComposeVersionNegotiation(srcConnID, destConnID, versions)
 			return &receivedPacket{
 				data:   b,
 				buffer: getPacketBuffer(),
