@@ -110,6 +110,7 @@ func populateConfig(config *Config, defaultConnIDLen int) *Config {
 		connIDGenerator = &protocol.DefaultConnectionIDGenerator{ConnLen: config.ConnectionIDLength}
 	}
 
+
 	return &Config{
 		Versions:                         versions,
 		HandshakeIdleTimeout:             handshakeIdleTimeout,
